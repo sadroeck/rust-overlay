@@ -29,7 +29,7 @@ let
       # entire unpacked contents after just a little twiddling.
       preferLocalBuild = true;
 
-      nativeBuildInputs = [ gnutar ] ++
+      nativeBuildInputs = [ gnutar zlib ] ++
         # Darwin doesn't use ELF, and they usually just work due to relative RPATH.
         optional (!dontFixup && !hostPlatform.isDarwin) autoPatchelfHook;
 
