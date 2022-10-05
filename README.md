@@ -13,6 +13,13 @@ no need to have network access. It also works well with [Nix Flakes](https://nix
 - Current oldest supported version is stable 1.29.0 and beta/nightly 2018-09-13
   (which are randomly picked and may change over time).
 
+rust-overlay is targeting these channels and they are tested on CI.
+Other channels may be supported but are not guarenteed.
+- nixpkgs-unstable
+- nixos-21.11 (for Linux)
+
+The minimal version of Nix supported is 2.4.
+
 For migration from [nixpkgs-mozilla], see [this section](#migration-from-nixpkgs-mozilla).
 
 ## Installation
@@ -40,14 +47,13 @@ And then feel free to use it anywhere like
 
 This repository already has flake support.
 
-NOTE: **Only the output `overlay` is stable and preferred to be used in your flake.**
-Other outputs like `packages` and `defaultPackage` are for human try and are subject to change.
+**Warning: Only the output `overlay`/`overlays` are currently stable. Use other outputs at your own risk!**
 
 For a quick play, just use `nix shell` to bring the latest stable rust toolchain into scope.
 (All commands below requires preview version of Nix with flake support.)
 ```shell
 $ nix shell github:oxalica/rust-overlay
-$ rustc --version
+$ rustc --version # This is only an example. You may get a newer version here.
 rustc 1.49.0 (e1884a8e3 2020-12-29)
 $ cargo --version
 cargo 1.49.0 (d00d64df9 2020-12-05)
@@ -61,7 +67,7 @@ Here's an example of using it in nixos configuration.
   description = "My configuration";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
@@ -72,7 +78,7 @@ Here's an example of using it in nixos configuration.
         modules = [
           ./configuration.nix # Your system configuration.
           ({ pkgs, ... }: {
-            nixpkgs.overlays = [ rust-overlay.overlay ];
+            nixpkgs.overlays = [ rust-overlay.overlays.default ];
             environment.systemPackages = [ pkgs.rust-bin.stable.latest.default ];
           })
         ];
@@ -84,14 +90,14 @@ Here's an example of using it in nixos configuration.
 
 #### Use in `devShell` for `nix develop`
 
-Running `nix develop` will create a shell with the default nightly Rust toolchain installed:
+Running `nix develop` will create a shell with the default beta Rust toolchain installed:
 
 ```nix
 {
   description = "A devShell example";
 
   inputs = {
-    nixpkgs.url      = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url      = "github:NixOS/nixpkgs/nixos-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
     flake-utils.url  = "github:numtide/flake-utils";
   };
@@ -106,13 +112,13 @@ Running `nix develop` will create a shell with the default nightly Rust toolchai
       in
       with pkgs;
       {
-        devShell = mkShell {
+        devShells.default = mkShell {
           buildInputs = [
             openssl
             pkgconfig
             exa
             fd
-            rust-bin.nightly.latest.default
+            rust-bin.beta.latest.default
           ];
 
           shellHook = ''
@@ -210,7 +216,7 @@ Running `nix develop` will create a shell with the default nightly Rust toolchai
   }
   ```
 
-  *Warning: This may not always work (including the example below) since upstream CI periodly purges old artifacts.*
+  *Warning: This may not always work (including the example below) since upstream CI periodically purges old artifacts.*
 
 - There also an cross-compilation example in [`examples/cross-aarch64`].
 

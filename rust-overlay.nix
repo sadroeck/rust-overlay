@@ -5,9 +5,9 @@ let
   inherit (builtins) compareVersions fromTOML match readFile tryEval;
 
   inherit (self.lib)
-    any attrNames attrValues concatMapStrings concatStringsSep elem elemAt filter flatten foldl'
-    hasPrefix head intersectLists isString length listToAttrs makeLibraryPath makeOverridable mapAttrs
-    mapAttrsToList optional optionalAttrs optionalString remove replaceStrings substring subtractLists trace unique;
+    any attrNames attrValues concatStringsSep elem elemAt filter flatten foldl'
+    hasPrefix head isString length listToAttrs makeOverridable mapAttrs
+    mapAttrsToList optional optionalAttrs replaceStrings substring trace unique;
 
   # Remove keys from attrsets whose value is null.
   removeNulls = set:
@@ -295,7 +295,8 @@ let
         mkAggregated {
           pname = "rust-${name}";
           version = manifest.version;
-          components = resolveComponents {
+          availableComponents = componentSet.${rustHostPlatform};
+          selectedComponents = resolveComponents {
             name = "rust-${name}-${manifest.version}";
             inherit allPlatformSet allComponentSet componentSet profileComponents targetExtensions;
             inherit (manifest) targetComponentsList;
@@ -383,13 +384,13 @@ let
   in
     mkAggregated {
       inherit pname version;
-      components = attrValues components';
+      selectedComponents = attrValues components';
     };
 
   # Select latest nightly toolchain which makes selected profile builds.
   # Some components are missing in some nightly releases.
   # Usage:
-  # `selectLatestNightlyWith (toolchain: toolchain.default.override { extensions = "llvm-tools-preview"; })`
+  # `selectLatestNightlyWith (toolchain: toolchain.default.override { extensions = ["llvm-tools-preview"]; })`
   selectLatestNightlyWith = selector:
     let
       nightlyDates = attrNames (removeAttrs self.rust-bin.nightly [ "latest" ]);

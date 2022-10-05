@@ -41,5 +41,14 @@
   "1.56.0" = import ./1.56.0.nix;
   "1.56.1" = import ./1.56.1.nix;
   "1.57.0" = import ./1.57.0.nix;
-  latest = "1.57.0";
+  "1.58.0" = import ./1.58.0.nix;
+  "1.58.1" = import ./1.58.1.nix;
+  "1.59.0" = import ./1.59.0.nix;
+  "1.60.0" = import ./1.60.0.nix;
+  "1.61.0" = import ./1.61.0.nix;
+  "1.62.0" = import ./1.62.0.nix;
+  "1.62.1" = import ./1.62.1.nix;
+  "1.63.0" = import ./1.63.0.nix;
+  "1.64.0" = import ./1.64.0.nix;
+  latest = "1.64.0";
 }

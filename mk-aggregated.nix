@@ -1,13 +1,16 @@
-{ lib, stdenv, symlinkJoin, pkgsTargetTarget, bash, gcc }:
-{ pname, version, components }:
+{ lib, stdenv, symlinkJoin, pkgsTargetTarget, bash }:
+{ pname, version, selectedComponents, availableComponents ? selectedComponents }:
 let
-  inherit (lib) optional optionalString;
+  inherit (lib) optional;
+  inherit (stdenv) targetPlatform;
 in
 symlinkJoin {
   name = pname + "-" + version;
   inherit pname version;
 
-  paths = components;
+  paths = selectedComponents;
+
+  passthru = { inherit availableComponents; };
 
   # Ourselves have offset -1. In order to make these offset -1 dependencies of downstream derivation,
   # they are offset 0 propagated.
@@ -15,13 +18,16 @@ symlinkJoin {
   # CC for build script linking.
   # Workaround: should be `pkgsHostHost.cc` but `stdenv`'s cc itself have -1 offset.
   depsHostHostPropagated = [ stdenv.cc ];
+
   # CC for crate linking.
   # Workaround: should be `pkgsHostTarget.cc` but `stdenv`'s cc itself have -1 offset.
-  propagatedBuildInputs = [ pkgsTargetTarget.stdenv.cc ];
+  # N.B. WASM targets don't need our CC.
+  propagatedBuildInputs =
+    optional (!targetPlatform.isWasm) pkgsTargetTarget.stdenv.cc;
 
   # Link dependency for target, required by darwin std.
   depsTargetTargetPropagated =
-    optional (stdenv.targetPlatform.isDarwin) [ pkgsTargetTarget.libiconv ];
+    optional (targetPlatform.isDarwin) [ pkgsTargetTarget.libiconv ];
 
   postBuild = ''
     # If rustc or rustdoc is in the derivation, we need to copy their
@@ -46,9 +52,8 @@ symlinkJoin {
     # symlinkJoin doesn't automatically handle it. Thus do it manually.
     mkdir $out/nix-support
     echo "$depsHostHostPropagated " >$out/nix-support/propagated-host-host-deps
-    echo "$propagatedBuildInputs " >$out/nix-support/propagated-build-inputs
-  '' + optionalString (stdenv.targetPlatform.isDarwin) ''
-    echo "$depsTargetTargetPropagated " >$out/nix-support/propagated-target-target-deps
+    [[ -z "$propagatedBuildInputs" ]] || echo "$propagatedBuildInputs " >$out/nix-support/propagated-build-inputs
+    [[ -z "$depsTargetTargetPropagated" ]] || echo "$depsTargetTargetPropagated " >$out/nix-support/propagated-target-target-deps
   '';
 
   meta.platforms = lib.platforms.all;

@@ -5,15 +5,14 @@ on:
     branches:
     - master
     - dev
-    - ci
 
   workflow_run:
     workflows:
-    - sync-channels
+      - sync-channels
     types:
-    - completed
+      - completed
     branches:
-    - master
+      - master
 
 jobs:
   flake-check:
@@ -22,17 +21,23 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0 # Nix Flakes doesn't work on shallow clones
+      uses: actions/checkout@v3.0.2
 
     - name: Install Nix (flakes, nixpkgs-unstable)
-      uses: cachix/install-nix-action@v16
-      with:
-        install_url: https://github.com/numtide/nix-flakes-installer/releases/download/nix-2.4pre20201221_9fab14a/install
-        extra_nix_config: |
-          experimental-features = nix-command flakes
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+      uses: cachix/install-nix-action@v17
+
+    # Flake check consumes tons of memory.
+    - name: Enlarge swap
+      run: |
+        free -h
+        swapon --show
+        SWAP_PATH=$(swapon --show=NAME --noheading | head -n1)
+        sudo swapoff -a
+        sudo fallocate -l 8G "$SWAP_PATH"
+        sudo mkswap "$SWAP_PATH"
+        sudo swapon "$SWAP_PATH"
+        free -h
+        swapon --show
 
     - name: Check flake
       run: nix flake check -v --show-trace --no-update-lock-file
@@ -43,15 +48,12 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3.0.2
 
-    - name: Install python
-      uses: actions/setup-python@v2
+    - name: Install Nix
+      uses: cachix/install-nix-action@v17
       with:
-        python-version: '3.x'
-
-    - name: Install python packages
-      run: pip3 install -r ./scripts/requirements.txt
+        nix_path: nixpkgs=channel:nixpkgs-unstable
 
     - name: Clean the latest version of each channel
       run: |
@@ -67,15 +69,15 @@ jobs:
         done
 
     - name: Re-fetch latest stable
-      run: python3 ./scripts/fetch.py stable
+      run: ./scripts/fetch.py stable
 
     - name: Re-fetch latest beta
-      run: python3 ./scripts/fetch.py beta
+      run: ./scripts/fetch.py beta
 
     - name: Re-fetch latest nightly
-      run: python3 ./scripts/fetch.py nightly
+      run: ./scripts/fetch.py nightly
 
-    - name: Check file changes
+    - name: Verify file changes
       run: |
         short_status=$(git status --short)
         echo "$short_status"
@@ -99,18 +101,38 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        channel: [stable, beta]
+        rust-channel: [stable, beta, nightly]
         profile: [minimal, default]
+        nixpkgs-channel: [nixpkgs-unstable, nixos-21.11]
+        exclude:
+          - os: macos-latest
+            nixpkgs-channel: nixos-21.11
+        include:
+          # The legacy package, used by compatible functions.
+          - os: ubuntu-latest
+            rust-channel: stable
+            profile: rust
+            nixpkgs-channel: nixpkgs-unstable
+          # Old Nix
+          - os: ubuntu-latest
+            rust-channel: stable
+            profile: default
+            nixpkgs-channel: nixos-21.11
+            nix_install_url: https://releases.nixos.org/nix/nix-2.4/install
+
     runs-on: ${{ matrix.os }}
+    env:
+      NIX_SHELL_CMD: nix-shell --pure --argstr channel ${{ matrix.rust-channel }} --argstr profile ${{ matrix.profile }}
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3.0.2
 
     - name: Install Nix
-      uses: cachix/install-nix-action@v16
+      uses: cachix/install-nix-action@v17
       with:
-        nix_path: nixpkgs=channel:nixpkgs-unstable
+        nix_path: nixpkgs=channel:${{ matrix.nixpkgs-channel }}
+        install_url: ${{ matrix.nix_install_url }}
 
     # Workaround for https://github.com/oxalica/rust-overlay/issues/54
     - name: Don't let ~/.cargo/bin mess things up
@@ -119,27 +141,27 @@ jobs:
     - name: Prepare nix-shell
       run: |
         cd examples/hello-world
-        nix-shell --pure --argstr profile ${{ matrix.profile }} --command true
+        $NIX_SHELL_CMD --command true
 
     - name: Test cargo build
       run: |
         cd examples/hello-world
         set -o pipefail
-        nix-shell --pure --argstr profile ${{ matrix.profile }} --command "make run" | tee out
+        $NIX_SHELL_CMD --command "make run" | tee out
         [[ "$(< out)" == *"Hello, world!"* ]]
 
     - name: Test cargo fmt
-      if: matrix.profile == 'default'
+      if: matrix.profile == 'default' || matrix.profile == 'rust'
       run: |
         cd examples/hello-world
-        nix-shell --pure --argstr profile ${{ matrix.profile }} --command "cargo fmt -- --check"
+        $NIX_SHELL_CMD --command "cargo fmt -- --check"
 
     - name: Test cargo clippy
-      if: matrix.profile == 'default'
+      if: matrix.profile == 'default' || matrix.profile == 'rust'
       run: |
         cd examples/hello-world
         set -o pipefail
-        nix-shell --pure --argstr profile ${{ matrix.profile }} --command "cargo clippy -- --cap-lints=warn" 2>&1 | tee out
+        $NIX_SHELL_CMD --command "cargo clippy -- --cap-lints=warn" 2>&1 | tee out
         [[ "$(< out)" == *"warning: this loop never actually loops"* ]]
 
   test-cross-examples:
@@ -153,10 +175,10 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3.0.2
 
     - name: Install Nix
-      uses: cachix/install-nix-action@v16
+      uses: cachix/install-nix-action@v17
       with:
         nix_path: nixpkgs=channel:nixpkgs-unstable
 
